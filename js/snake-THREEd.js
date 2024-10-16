@@ -4,6 +4,11 @@ var angulo = -0.01;
 var cameraTop;
 var ctx;
 
+
+function to_rad(deg) {
+    return deg * (Math.PI/180)
+}
+
 const controls = {
     // for some reason on the first frame collision w ground is not detected so we die
     // so we start with false and death just negates controls.enabled, so control is live
@@ -18,9 +23,15 @@ const controls = {
     speed_arrow_visible: true,
     speed_multiplier: 1,
     speed: 0.5,
-    flashlight_power: 0.5,
+    flashlight_power: 1.5,
+    ambient_light: 0.4,
     is_debug_view: false,
 };
+loader = new THREE.TextureLoader()
+OBSTACLE_TEXTURE = loader.load('textures/TCom_Rock_CliffLayered_header Small.jpeg')
+GROUND_TEXTURE = loader.load('textures/soil-surface-texture-3.jpeg')
+SNAKE_SKIN_TEXTURE = loader.load('textures/seamless-tile-background-with-lizard-skin-effect Small.jpeg')
+
 
 const stats = new Stats()
 const raycaster = new THREE.Raycaster();
@@ -31,6 +42,8 @@ var debug_was_enabled = controls.is_debug_view
 init();
 const axesHelper = new THREE.AxesHelper( 1000 );
 scene.add(axesHelper);
+ambient = new THREE.AmbientLight(0x404040, controls.ambient_light)
+scene.add(ambient)
 
 center_side = 15
 pl = createPlane(500, center_side)
@@ -50,8 +63,6 @@ minimapArrow.position.z += 7
 mainCameraArrow = minimapArrow.clone()
 minimapArrow.position.y += 100
 
-
-
 snake.add(mainCameraArrow)
 snake.add(minimapArrow)
 
@@ -63,7 +74,6 @@ snake.add(cameraTop)
 //snake.add(camera)
 
 
-the_ground = scene.children.filter(obj => obj !== snake && obj === plane)
 render();
 
 var time = 0
@@ -120,7 +130,7 @@ function init()
     renderer.setSize( window.innerWidth, window.innerHeight );
     renderer.setClearColor( new THREE.Color(0xFFFFFF) );
     document.getElementById('container').appendChild( renderer.domElement );
-
+    renderer.shadowMap.enabled = true
     // Configurar el canvas de texto
     textCanvas = document.getElementById("text_canvas");
     ctx = textCanvas.getContext("2d");
@@ -160,7 +170,8 @@ function init()
 
     var gui_gameplay = gui.addFolder('Gameplay')
     gui_gameplay.add(controls, 'speed_multiplier', 0.1, 5).name('Velocidad').listen()
-    gui_gameplay.add(controls, 'flashlight_power', 0.5, 2).name('Potencia Luz').listen()
+    gui_gameplay.add(controls, 'flashlight_power', 1, 2).name('Potencia Luz').listen()
+    gui_gameplay.add(controls, 'ambient_light', 0, 2).name('Luz ambiente').listen()
 
     gui_gameplay.open()
     gui_is_3d.open()
@@ -214,8 +225,9 @@ function createSnakeSegment(l) {
     boxGeo = new THREE.BoxGeometry(l, l, l)
     box = new THREE.Mesh(
         boxGeo,
-        new THREE.MeshBasicMaterial({color: 0x00ff00})
+        new THREE.MeshLambertMaterial({color: 0x00ff00, map: SNAKE_SKIN_TEXTURE})
     )
+    box.castShadow = true
 
     edges = new THREE.EdgesGeometry( boxGeo ); 
     line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial( { color: 0x000000 } ) ); 
@@ -263,7 +275,7 @@ function createFace() {
     faceGeo = new THREE.ConeGeometry(0.5, 1, 32)
     faceCone = new THREE.Mesh(
         faceGeo,
-        new THREE.MeshBasicMaterial({color: 0x00ff00})
+        new THREE.MeshBasicMaterial({color: 0x00ff00, map: SNAKE_SKIN_TEXTURE})
     )
     
     
@@ -308,16 +320,21 @@ function createSnake() {
         createSnakeSegment(1)
     )
     
+    face = createFace()
     snake.add(
-        createFace()
+        face
     )
     
-    flashlight_bot = new THREE.PointLight(0xffffff, controls.flashlight_power, 50)
+    flashlight_bot = new THREE.SpotLight(0xffffff, controls.flashlight_power, 50)
     flashlight_bot.name = 'flashlight_bot'
-    
-    flashlight_top = new THREE.PointLight(0xffffff, controls.flashlight_power, 50)
+    flashlight_bot.castShadow = true
+    flashlight_bot.target = face
+    flashlight_bot.shadow.camera.near = 1.5
+
+    flashlight_top = new THREE.PointLight(0xffffff, controls.flashlight_power-10, 50)
     flashlight_top.position.y += 50
     flashlight_top.name = 'flashlight_top'
+    flashlight_top.castShadow = true
 
     snake.add(flashlight_bot)
     snake.add(flashlight_top)
@@ -328,14 +345,16 @@ function createSnake() {
 function createPlane(plane_side, center_side) {
     // Crear y añadir un plano que actúe como suelo
     const planeGeometry = new THREE.PlaneGeometry(plane_side, plane_side);
-    const planeMaterial = new THREE.MeshBasicMaterial({color: 0x000000, side: THREE.DoubleSide});
+    const planeMaterial = new THREE.MeshPhongMaterial({side: THREE.DoubleSide, map: GROUND_TEXTURE});
     const plane = new THREE.Mesh(planeGeometry, planeMaterial);
+    plane.receiveShadow = true
 
     // crear el centro q sea visible
     const center = new THREE.Mesh(
         new THREE.PlaneGeometry(center_side, center_side),
-        new THREE.MeshBasicMaterial({color: 0x123456789, side: THREE.DoubleSide})
+        new THREE.MeshPhongMaterial({color: 0x123456789, side: THREE.DoubleSide, mat: GROUND_TEXTURE})
     )
+    center.receiveShadow = true
     center.rotation.x = Math.PI / 2
     plane.rotation.x = Math.PI / 2; // Rotar el plano para que esté horizontal
     plane.name = 'ground'
@@ -343,9 +362,10 @@ function createPlane(plane_side, center_side) {
 }
 
 function scatterObstacles(plane_side, center_side, how_many) {
-
+    loader = new THREE.TextureLoader()
     // Generar y añadir cubos como edificios
     for (let i = 0; i < how_many; i++) {
+
         // Dimensiones aleatorias para los edificios
         const width = 5 + Math.random() * 5;
         const depth = 5 + Math.random() * 5;
@@ -353,7 +373,7 @@ function scatterObstacles(plane_side, center_side, how_many) {
 
         // Geometría y material para los edificios
         const boxGeometry = new THREE.BoxGeometry(width, height, depth);
-        const boxMaterial = new THREE.MeshLambertMaterial({color: 0xff0000});
+        const boxMaterial = new THREE.MeshLambertMaterial({map: OBSTACLE_TEXTURE});
 
         // Crear el mesh del edificio y posicionarlo
         const box = new THREE.Mesh(boxGeometry, boxMaterial);
@@ -370,7 +390,9 @@ function scatterObstacles(plane_side, center_side, how_many) {
 
         // Añadir el edificio a la escena
         box.name = 'obstacle at' + rdx + ', ' + rdy
+        box.castShadow = true
         scene.add(box);
+        
     }
 }
 
@@ -379,7 +401,7 @@ function updatePoints(points) {
     ctx.clearRect(0, 0, textCanvas.width, textCanvas.height); // Limpiar el canvas antes de redibujar
     ctx.font = "24px Arial";
     ctx.fillStyle = "white";
-    ctx.fillText("Puntos: " + points, 50, 80);
+    ctx.fillText("Puntos: " + points, textCanvas.width*0.05, textCanvas.height*0.08);
 
 }
 
@@ -391,28 +413,35 @@ function update()
   stats.update()
 
   time += 0.01;
+  ambient.intensity = controls.ambient_light
 
   // avoid updating materials all the time
   if (debug_was_enabled != controls.is_debug_view && controls.enabled) {
     debug_was_enabled = controls.is_debug_view
-
+    loader = new THREE.TextureLoader()
     if (controls.is_debug_view) {
-        mat = new THREE.MeshNormalMaterial()
+        obstacle_mat = new THREE.MeshNormalMaterial()
+        //ground_mat = new THREE.MeshBasicMaterial({color: 0})
+        controls.ambient_light = 100
     } else {
-        mat = new THREE.MeshLambertMaterial({color: 0xff0000})
+        obstacle_mat = new THREE.MeshLambertMaterial({map: OBSTACLE_TEXTURE})
+        //ground_mat = new THREE.MeshPhongMaterial({map: GROUND_TEXTURE})
+        controls.ambient_light = 0.4
     }
     scene.traverse((object) => {
         // Check if the object is a Mesh and its name starts with 'obstacle'
         if (object.isMesh && object.name.startsWith('obstacle')) {
           // Assign the MeshNormalMaterial to the object
-          object.material = mat;
+          object.material = obstacle_mat;
         }
     })
+    //scene.getObjectByName('ground').material = ground_mat
     controls.speed_arrow_visible = true
   }
 
   flashlight_bot = snake.getObjectByName('flashlight_bot', true)
   flashlight_top = snake.getObjectByName('flashlight_top', true)
+  
   flashlight_bot.intensity = controls.flashlight_power
   flashlight_top.intensity = controls.flashlight_power
 
@@ -467,6 +496,8 @@ function update()
         }
     }
 
+  plane = scene.getObjectByName('ground')
+  the_ground = scene.children.filter(obj => obj !== snake && obj === plane)
   raycaster.set(p_pos, new THREE.Vector3(0, -1, 0))
   touches_ground = raycaster.intersectObjects(the_ground, true)
 
@@ -504,9 +535,9 @@ function triggerDeath(reason, collided_obj) {
         controls.speed_arrow_visible = false
         var loader = new THREE.FontLoader();
         // from https://threejs.org/docs/#examples/en/geometries/TextGeometry
-        loader.load( 'fonts/helvetiker_regular.typeface.json', function ( font ) {
+        loader.load('fonts/helvetiker_regular.typeface.json', function ( font ) {
 
-            const geometry = new THREE.TextGeometry( 'Linguini died !\n'+reason + '\n' , {
+            const geometry = new THREE.TextGeometry('Linguini died !\n'+reason + '\n' , {
                 font: font,
                 size: 80,
                 depth: 5,
@@ -531,14 +562,8 @@ function triggerDeath(reason, collided_obj) {
             }
         )
 
-        // light up the scene
-        scene.traverse((object) => {
-            // Check if the object is a Mesh and its name starts with 'obstacle'
-            if (object.isMesh && object.name.startsWith('obstacle')) {
-              // Assign the MeshNormalMaterial to the object
-              object.material = new THREE.MeshNormalMaterial();
-            }
-        })
+        
+        controls.flashlight_power = 10
         controls.main_camera_is_3d = false
     }
 
@@ -585,7 +610,7 @@ function render()
     // vista 3d perspectiva
     renderer.autoClear = false;
     renderer.setViewport(0,0,cam_3d_w,cam_3d_h);
-	renderer.setClearColor( new THREE.Color(0x000000) );
+	renderer.setClearColor( new THREE.Color(0xffffff) );
 	renderer.clear();
 
     flashlight_top.visible = false
@@ -602,7 +627,7 @@ function render()
     renderer.setViewport(0,0,cam_mini_w,cam_mini_h);
 	renderer.setScissor(0, 0, ds, ds);
 	renderer.setScissorTest(true);
-	renderer.setClearColor( new THREE.Color(0xaffff) );
+	renderer.setClearColor( new THREE.Color(0xffffff) );
 	renderer.clear();	
 
 	renderer.setScissorTest(false);
