@@ -561,8 +561,10 @@ function triggerDeath(reason, collided_obj) {
         // from https://threejs.org/docs/#examples/en/geometries/TextGeometry
         loader.load('fonts/helvetiker_regular.typeface.json', function ( font ) {
             console.log(collided_obj)
-            if (collided_obj != undefined) {
+            if (collided_obj != undefined && collided_obj.object.name != '') {
                 collided_txt = 'with ' + collided_obj.object.name
+            } else if (collided_obj != undefined && collided_obj.object.name == ''){
+                collided_txt = 'with itself!'
             } else {
                 collided_txt = ''
             }
