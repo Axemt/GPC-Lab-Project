@@ -124,6 +124,11 @@ document.addEventListener('keyup', (event) => {
     }
 });
 
+function random_choice(choices) {
+    var index = Math.floor(Math.random() * choices.length);
+    return choices[index];
+  }
+
 function init()
 {
     renderer = new THREE.WebGLRenderer();
@@ -305,6 +310,7 @@ function createFace() {
 
     tongue = createFaceTongue()
     face.add(tongue)
+    face.name = 'linguini'
 
     
 
@@ -370,28 +376,43 @@ function scatterObstacles(plane_side, center_side, how_many) {
         const width = 5 + Math.random() * 5;
         const depth = 5 + Math.random() * 5;
         const height = Math.random() * 15 + 5; // Altura entre 5 y 20
+        const rot = Math.random() * to_rad(30)
 
+        const type_of_obstacle = random_choice(['box', 'cylinder', 'diamond', 'prism'])
+        var geo
+        if (type_of_obstacle == 'box') {
+            geo = new THREE.BoxGeometry(width, height, depth);
+        } else if (type_of_obstacle == 'cylinder') {
+            geo = new THREE.CylinderGeometry(width, width, depth);
+        } else if (type_of_obstacle == 'diamond') {
+            geo = new THREE.OctahedronGeometry(depth+5)
+        } else if (type_of_obstacle == 'prism') {
+            geo = new THREE.TetrahedronGeometry(depth+5)
+        }
         // Geometría y material para los edificios
-        const boxGeometry = new THREE.BoxGeometry(width, height, depth);
         const boxMaterial = new THREE.MeshLambertMaterial({map: OBSTACLE_TEXTURE});
 
         // Crear el mesh del edificio y posicionarlo
-        const box = new THREE.Mesh(boxGeometry, boxMaterial);
+        const obs = new THREE.Mesh(geo, boxMaterial);
+        obs.rotation.y += rot
+        obs.position.y -= 15
+
         rdx = Math.random()
         rdy = Math.random()
-        box.position.x = rdx * plane_side - plane_side/2; // Posición aleatoria en X dentro del plano
-        box.position.z = rdy * plane_side - plane_side/2; // Posición aleatoria en Z dentro del plano
-        box.position.y = height / 2; // Ajustar la posición en Y para que la base esté sobre el suelo
+        obs.position.x = rdx * plane_side - plane_side/2; // Posición aleatoria en X dentro del plano
+        obs.position.z = rdy * plane_side - plane_side/2; // Posición aleatoria en Z dentro del plano
+        obs.position.y = height / 2; // Ajustar la posición en Y para que la base esté sobre el suelo
 
-        if (Math.abs(box.position.x) <= 10 && Math.abs(box.position.z) <= 10) {
-            box.position.x += center_side + 5; // Moverlo fuera de la zona central
-            box.position.z += center_side + 5;
+        if (Math.abs(obs.position.x) <= 20 && Math.abs(obs.position.z) <= 20) {
+            obs.position.x += center_side + 20; // Moverlo fuera de la zona central
+            obs.position.z += center_side + 20;
         }
 
         // Añadir el edificio a la escena
-        box.name = 'obstacle at' + rdx + ', ' + rdy
-        box.castShadow = true
-        scene.add(box);
+        obs.name = type_of_obstacle + ' obstacle'
+        obs.castShadow = true
+        obs.receiveShadow = true
+        scene.add(obs);
         
     }
 }
@@ -422,16 +443,19 @@ function update()
     if (controls.is_debug_view) {
         obstacle_mat = new THREE.MeshNormalMaterial()
         //ground_mat = new THREE.MeshBasicMaterial({color: 0})
-        controls.ambient_light = 100
+        controls.ambient_light = 10
+        axesHelper.visible = true
     } else {
         obstacle_mat = new THREE.MeshLambertMaterial({map: OBSTACLE_TEXTURE})
         //ground_mat = new THREE.MeshPhongMaterial({map: GROUND_TEXTURE})
         controls.ambient_light = 0.4
+        axesHelper.visible = false
     }
     scene.traverse((object) => {
         // Check if the object is a Mesh and its name starts with 'obstacle'
-        if (object.isMesh && object.name.startsWith('obstacle')) {
+        if (object.isMesh && object.name.includes('obstacle')) {
           // Assign the MeshNormalMaterial to the object
+          console.log('a')
           object.material = obstacle_mat;
         }
     })
@@ -536,28 +560,33 @@ function triggerDeath(reason, collided_obj) {
         var loader = new THREE.FontLoader();
         // from https://threejs.org/docs/#examples/en/geometries/TextGeometry
         loader.load('fonts/helvetiker_regular.typeface.json', function ( font ) {
-
-            const geometry = new THREE.TextGeometry('Linguini died !\n'+reason + '\n' , {
+            console.log(collided_obj)
+            if (collided_obj != undefined) {
+                collided_txt = 'with ' + collided_obj.object.name
+            } else {
+                collided_txt = ''
+            }
+            const geometry = new THREE.TextGeometry('Linguini  ' + reason + '!\n' + collided_txt  , {
                 font: font,
-                size: 80,
+                size: 50,
                 depth: 5,
                 curveSegments: 12,
                 bevelEnabled: true,
                 bevelThickness: 10,
-                bevelSize: 8,
+                bevelSize: 0.5,
                 bevelOffset: 0,
                 bevelSegments: 5
             } );
 
             text = new THREE.Mesh(
                 geometry,
-                new THREE.MeshNormalMaterial()
+                new THREE.MeshBasicMaterial({color: 'red'})
             )
             text.scale.set(0.05, 0.05, 0.05)
             cameraTop.add(text)
 
             text.position.z -= 50
-            text.position.x -= 15
+            text.position.x -= 20
 
             }
         )
@@ -610,7 +639,7 @@ function render()
     // vista 3d perspectiva
     renderer.autoClear = false;
     renderer.setViewport(0,0,cam_3d_w,cam_3d_h);
-	renderer.setClearColor( new THREE.Color(0xffffff) );
+	renderer.setClearColor( new THREE.Color(0x0) );
 	renderer.clear();
 
     flashlight_top.visible = false
@@ -627,7 +656,7 @@ function render()
     renderer.setViewport(0,0,cam_mini_w,cam_mini_h);
 	renderer.setScissor(0, 0, ds, ds);
 	renderer.setScissorTest(true);
-	renderer.setClearColor( new THREE.Color(0xffffff) );
+	renderer.setClearColor( new THREE.Color(0x0) );
 	renderer.clear();	
 
 	renderer.setScissorTest(false);
