@@ -645,7 +645,6 @@ function render()
 	renderer.clear();
 
     flashlight_top.visible = false
-    flashlight_bot.visible = true
 	
     renderer.render( scene, camera );
 
@@ -664,7 +663,6 @@ function render()
 	renderer.setScissorTest(false);
 
     flashlight_top.visible = true
-    flashlight_bot.visible = false
 
     renderer.render(scene, cameraTop);
 
