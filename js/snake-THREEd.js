@@ -37,10 +37,12 @@ const stats = new Stats()
 const raycaster = new THREE.Raycaster();
 var objectsToCheck;
 var points = 0
+var new_snake_segment = undefined
 var debug_was_enabled = controls.is_debug_view
 
 init();
 const axesHelper = new THREE.AxesHelper( 1000 );
+axesHelper.visible = false
 scene.add(axesHelper);
 ambient = new THREE.AmbientLight(0x404040, controls.ambient_light)
 scene.add(ambient)
@@ -71,7 +73,6 @@ scene.add(
 )
 p_pos = snake.position
 snake.add(cameraTop)
-//snake.add(camera)
 
 
 render();
@@ -223,11 +224,15 @@ function updateAspectRatio()
   camera.updateProjectionMatrix();
 }
 
-function createSnakeSegment(l) {
+function createSnakeSegment(l, d) {
 
     segment = new THREE.Object3D()
     segment.name = 'snake_segment'
-    boxGeo = new THREE.BoxGeometry(l, l, l)
+
+    if (d == undefined)
+        d = l
+
+    boxGeo = new THREE.BoxGeometry(l, d, l)
     box = new THREE.Mesh(
         boxGeo,
         new THREE.MeshLambertMaterial({color: 0x00ff00, map: SNAKE_SKIN_TEXTURE})
@@ -491,7 +496,7 @@ function update()
         // Configurar el rayo desde la posición actual del jugador y en la dirección de movimiento
         raycaster.set(p_pos, velocity);
         // Detectar intersecciones con objetos en la escena (por ejemplo, las paredes)
-        objectsToCheck = scene.children.filter(obj => obj !== snake && obj !== axesHelper);    
+        objectsToCheck = scene.children.filter(obj => obj !== snake && obj !== axesHelper && obj !== new_snake_segment);    
         intersects = raycaster.intersectObjects(objectsToCheck, true);
         // Si no hay intersección, permitir el movimiento
         
@@ -506,7 +511,7 @@ function update()
         }
 
         if (!collides) {
-            new_snake_segment = createSnakeSegment( 0.7 )
+            new_snake_segment = createSnakeSegment( 0.7+controls.speed  )
             new_snake_segment.position.set(p_pos.x, p_pos.y, p_pos.z)
             
             scene.add(new_snake_segment)
@@ -518,6 +523,11 @@ function update()
             triggerDeath('crashed', intersects[i])
 
         }
+
+        //camera.position.set(p_pos.x-100, p_pos.y+100, p_pos.z+10);
+        snake.position.set(p_pos.x, p_pos.y, p_pos.z)
+        cameraControls.target.set(p_pos.x, p_pos.y - 10, p_pos.z)
+      
     }
 
   plane = scene.getObjectByName('ground')
@@ -534,21 +544,12 @@ function update()
 
   snake.rotation.y = angulo
 
-  // camara en primera persona
-  //camera.position.set(p_pos.x, p_pos.y+10, p_pos.z);
-  snake.position.set(p_pos.x, p_pos.y, p_pos.z)
-
 
   controls.speed = Math.abs(Math.sin(time)) * controls.speed_multiplier
   if (controls.enabled) {
     mainCameraArrow.scale.set(1 , Math.max( 0.15, controls.speed), 1)
     minimapArrow.scale.set(1 , Math.max( 0.15, controls.speed), 1)
   }
-
-  cameraControls.target.set(p_pos.x -10, p_pos.y - 10, p_pos.z - 10)
-  //camera.position.set(p_pos.x +10, p_pos.y + 10, p_pos.z + 10)
-  // y mirando hacia adelante
-  //camera.lookAt(p_pos);
 }
 
 function triggerDeath(reason, collided_obj) {
