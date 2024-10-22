@@ -158,6 +158,7 @@ function init()
     cameraTop.updateProjectionMatrix();
     cameraTop.rotation.z = Math.PI
 
+    // vista perspectiva
     cameraControls = new THREE.OrbitControls( camera, renderer.domElement );
     cameraControls.target.set( 0, 0, 0 );
     cameraControls.maxPolarAngle = Math.PI/4
@@ -316,8 +317,6 @@ function createFace() {
     tongue = createFaceTongue()
     face.add(tongue)
     face.name = 'linguini'
-
-    
 
     return face
 }
@@ -511,11 +510,12 @@ function update()
         }
 
         if (!collides) {
-            new_snake_segment = createSnakeSegment( 0.7+controls.speed  )
+            new_snake_segment = createSnakeSegment( 1.7 )
+            new_snake_segment.rotation = snake.rotation
             new_snake_segment.position.set(p_pos.x, p_pos.y, p_pos.z)
             
             scene.add(new_snake_segment)
-            p_pos.add(velocity.clone().multiplyScalar(controls.speed+0.7))
+            p_pos.add(velocity.clone().multiplyScalar( Math.max([controls.speed+0.7])))
             
             console.log("YOU're safe")
             points += 1
@@ -538,12 +538,8 @@ function update()
   if (touches_ground.length == 0) {
     triggerDeath('fell')
   }
-  
-  
-
 
   snake.rotation.y = angulo
-
 
   controls.speed = Math.abs(Math.sin(time)) * controls.speed_multiplier
   if (controls.enabled) {
