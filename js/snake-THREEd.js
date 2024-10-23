@@ -74,6 +74,7 @@ scene.add(
 p_pos = snake.position
 
 l_pos = []
+next_segment = undefined
 snake.add(cameraTop)
 
 
@@ -495,7 +496,6 @@ function update()
         // Check if the object is a Mesh and its name starts with 'obstacle'
         if (object.isMesh && object.name.includes('obstacle')) {
           // Assign the MeshNormalMaterial to the object
-          console.log('a')
           object.material = obstacle_mat;
         }
     })
@@ -531,7 +531,7 @@ function update()
         // Configurar el rayo desde la posición actual del jugador y en la dirección de movimiento
         raycaster.set(p_pos, velocity);
         // Detectar intersecciones con objetos en la escena (por ejemplo, las paredes)
-        objectsToCheck = scene.children.filter(obj => obj !== snake && obj !== axesHelper);    
+        objectsToCheck = scene.children.filter(obj => obj !== snake && obj !== axesHelper && obj !== next_segment);    
         intersects = raycaster.intersectObjects(objectsToCheck, true);
         // Si no hay intersección, permitir el movimiento
         
@@ -540,7 +540,6 @@ function update()
             if (intersects[i].distance > 0 && intersects[i].distance <= controls.speed+0.7 ) {
                 // mueve el personaje
                 collides = true
-                console.log(intersects[i])
                 break
                 }  
         }
@@ -551,14 +550,11 @@ function update()
             
             p_pos.add(velocity.clone().multiplyScalar( Math.max([controls.speed+0.7])))
             l_pos.push(p_pos.clone())
-            console.log(l_pos)
             //new_snake_segment = createSnakeCurveSegment(last_p_pos, p_pos)
             //new_snake_segment.rotation = snake.rotation
             scene.remove(new_snake_segment)
             new_snake_segment = new THREE.Object3D()
-            console.log('------')
             for (i=0; i < l_pos.length-1; i++) {
-                console.log(l_pos[i], l_pos[i+1])
                 next_segment = createSnakeCurveSegment(l_pos[i], l_pos[i+1])
                 new_snake_segment.add(next_segment)
             }
@@ -608,8 +604,6 @@ function triggerDeath(reason, collided_obj) {
             console.log(collided_obj)
             collided_text = ''
             if (collided_obj !== undefined) {
-                console.log(collided_obj)
-                console.log(collided_obj.object.name)
                 if (collided_obj.object.name == 'snake_segment') {
                     collided_txt = 'with itself!'
                 } else if (collided_obj.object.name != ''){
