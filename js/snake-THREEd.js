@@ -24,7 +24,7 @@ const controls = {
     speed_multiplier: 1,
     speed: 0.5,
     flashlight_power: 1.5,
-    ambient_light: 0.4,
+    ambient_light: 0.25,
     is_debug_view: false,
 };
 loader = new THREE.TextureLoader()
@@ -72,6 +72,8 @@ scene.add(
     snake
 )
 p_pos = snake.position
+
+l_pos = []
 snake.add(cameraTop)
 
 
@@ -109,6 +111,7 @@ document.addEventListener('keyup', (event) => {
         case 'ArrowUp':
         case 'KeyW':
             controls.moveForward = false;
+            last_p_pos = snake.position
             break;
         case 'ArrowDown':
         case 'KeyS':
@@ -245,6 +248,39 @@ function createSnakeSegment(l, d) {
     
     segment.add(box)
     segment.add(line)
+
+    return segment
+}
+
+function createSnakeCurveSegment(point_a, point_b) {
+
+    const control_point = new THREE.Vector3(
+        (point_a.x + point_b.x) / 2,
+        (point_a.y + point_b.y) / 2,
+        (point_a.z + point_b.z) / 2,
+    )
+
+    curve = new THREE.QuadraticBezierCurve3(
+        point_a,
+        control_point,
+        point_b
+    )
+
+    segment_mesh = new THREE.TubeGeometry(
+        curve,
+        64,
+        1,
+        8,
+        true
+    )
+
+    segment = new THREE.Mesh(
+        segment_mesh,
+        new THREE.MeshLambertMaterial({map: SNAKE_SKIN_TEXTURE})
+    )
+    segment.name = 'snake_segment'
+    segment.castShadow = true
+    segment.receiveShadow = true
 
     return segment
 }
@@ -495,7 +531,7 @@ function update()
         // Configurar el rayo desde la posición actual del jugador y en la dirección de movimiento
         raycaster.set(p_pos, velocity);
         // Detectar intersecciones con objetos en la escena (por ejemplo, las paredes)
-        objectsToCheck = scene.children.filter(obj => obj !== snake && obj !== axesHelper && obj !== new_snake_segment);    
+        objectsToCheck = scene.children.filter(obj => obj !== snake && obj !== axesHelper);    
         intersects = raycaster.intersectObjects(objectsToCheck, true);
         // Si no hay intersección, permitir el movimiento
         
@@ -510,12 +546,24 @@ function update()
         }
 
         if (!collides) {
-            new_snake_segment = createSnakeSegment( 1.7 )
-            new_snake_segment.rotation = snake.rotation
-            new_snake_segment.position.set(p_pos.x, p_pos.y, p_pos.z)
+            //new_snake_segment = createSnakeSegment( 1.7 )
+            //new_snake_segment.position.set(p_pos.x, p_pos.y, p_pos.z)
+            
+            p_pos.add(velocity.clone().multiplyScalar( Math.max([controls.speed+0.7])))
+            l_pos.push(p_pos.clone())
+            console.log(l_pos)
+            //new_snake_segment = createSnakeCurveSegment(last_p_pos, p_pos)
+            //new_snake_segment.rotation = snake.rotation
+            scene.remove(new_snake_segment)
+            new_snake_segment = new THREE.Object3D()
+            console.log('------')
+            for (i=0; i < l_pos.length-1; i++) {
+                console.log(l_pos[i], l_pos[i+1])
+                next_segment = createSnakeCurveSegment(l_pos[i], l_pos[i+1])
+                new_snake_segment.add(next_segment)
+            }
             
             scene.add(new_snake_segment)
-            p_pos.add(velocity.clone().multiplyScalar( Math.max([controls.speed+0.7])))
             
             console.log("YOU're safe")
             points += 1
@@ -558,12 +606,15 @@ function triggerDeath(reason, collided_obj) {
         // from https://threejs.org/docs/#examples/en/geometries/TextGeometry
         loader.load('fonts/helvetiker_regular.typeface.json', function ( font ) {
             console.log(collided_obj)
-            if (collided_obj != undefined && collided_obj.object.name != '') {
-                collided_txt = 'with ' + collided_obj.object.name
-            } else if (collided_obj != undefined && collided_obj.object.name == ''){
-                collided_txt = 'with itself!'
-            } else {
-                collided_txt = ''
+            collided_text = ''
+            if (collided_obj !== undefined) {
+                console.log(collided_obj)
+                console.log(collided_obj.object.name)
+                if (collided_obj.object.name == 'snake_segment') {
+                    collided_txt = 'with itself!'
+                } else if (collided_obj.object.name != ''){
+                    collided_txt = 'with ' + collided_obj.object.name
+                }
             }
             const geometry = new THREE.TextGeometry('Linguini  ' + reason + '!\n' + collided_txt  , {
                 font: font,
